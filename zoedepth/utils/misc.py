@@ -42,6 +42,7 @@ import torch.nn as nn
 import torch.utils.data.distributed
 from PIL import Image
 from torchvision.transforms import ToTensor
+import cv2
 
 
 class RunningAverage:
@@ -177,6 +178,17 @@ def compute_errors(gt, pred):
             'rmse_log': Root mean squared error on the log scale
             'silog': Scale invariant log error
     """
+    # print(gt)
+    # print(pred)
+
+    # if len(gt)==0:
+    #     print("fuck your mom Empty array")
+    #     return dict(a1=1, a2=1, a3=1, abs_rel=0, rmse=0, log_10=0, rmse_log=0,
+    #             silog=0, sq_rel=0)
+
+    # np.savetxt("/pub/data/lz/consist_depth/rendering/test/forLook/gt.txt", gt, fmt='%.6f')
+    # np.savetxt("/pub/data/lz/consist_depth/rendering/test/forLook/pred.txt", pred, fmt='%.6f')
+    # gt = gt*10
     thresh = np.maximum((gt / pred), (pred / gt))
     a1 = (thresh < 1.25).mean()
     a2 = (thresh < 1.25 ** 2).mean()
@@ -208,6 +220,8 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
         eigen_crop = config.eigen_crop
         min_depth_eval = config.min_depth_eval
         max_depth_eval = config.max_depth_eval
+    # print(min_depth_eval)  #0.001
+    # print(max_depth_eval)  #10 
 
     if gt.shape[-2:] != pred.shape[-2:] and interpolate:
         pred = nn.functional.interpolate(
@@ -242,6 +256,16 @@ def compute_metrics(gt, pred, interpolate=True, garg_crop=False, eigen_crop=True
         else:
             eval_mask = np.ones(valid_mask.shape)
     valid_mask = np.logical_and(valid_mask, eval_mask)
+
+    lzdataset_mask = np.where(gt_depth==1,0,1)
+    valid_mask = np.logical_and(valid_mask, lzdataset_mask)
+    forLook_mask = Image.fromarray(valid_mask)
+
+    forLook_mask.save("/pub/data/lz/consist_depth/rendering/test/forLook/valid_mask.png")
+    np.savetxt("/pub/data/lz/consist_depth/rendering/test/forLook/gt.txt", gt_depth, fmt='%.3f')
+    np.savetxt("/pub/data/lz/consist_depth/rendering/test/forLook/pred.txt", pred, fmt='%.3f')
+
+    # cv2.imwrite("/pub/data/lz/consist_depth/rendering/test/forLook/valid_mask.png",valid_mask)
     return compute_errors(gt_depth[valid_mask], pred[valid_mask])
 
 

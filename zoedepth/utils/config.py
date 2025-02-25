@@ -36,7 +36,7 @@ ROOT = pathlib.Path(__file__).parent.parent.resolve()
 HOME_DIR = os.path.expanduser("~")
 
 COMMON_CONFIG = {
-    "save_dir": os.path.expanduser("~/shortcuts/monodepth3_checkpoints"),
+    "save_dir": "/pub/data/lz/consist_depth/MDE/ZoeDepth/zoedepth/checkpoints",
     "project": "ZoeDepth",
     "tags": '',
     "notes": "",
@@ -93,7 +93,7 @@ DATASETS_CONFIG = {
         "eigen_crop": False,
         "use_right": False
     },
-    "nyu": {
+    "nyu_real": {
         "dataset": "nyu",
         "avoid_boundary": False,
         "min_depth": 1e-3,   # originally 0.1
@@ -106,6 +106,31 @@ DATASETS_CONFIG = {
         "data_path_eval": os.path.join(HOME_DIR, "shortcuts/datasets/nyu_depth_v2/official_splits/test/"),
         "gt_path_eval": os.path.join(HOME_DIR, "shortcuts/datasets/nyu_depth_v2/official_splits/test/"),
         "filenames_file_eval": "./train_test_inputs/nyudepthv2_test_files_with_gt.txt",
+        "min_depth_eval": 1e-3,
+        "max_depth_eval": 10,
+        "min_depth_diff": -10,
+        "max_depth_diff": 10,
+
+        "do_random_rotate": True,
+        "degree": 1.0,
+        "do_kb_crop": False,
+        "garg_crop": False,
+        "eigen_crop": True
+    },
+    
+    "nyu": {
+        "dataset": "nyu",
+        "avoid_boundary": False,
+        "min_depth": 1e-3,   # originally 0.1
+        "max_depth": 10,
+        "data_path": "/pub/data/lz/consist_depth/lzdataset/",
+        "gt_path": "/pub/data/lz/consist_depth/lzdataset/",
+        "filenames_file": "./train_test_inputs/mytrain.txt",
+        "input_height": 480,
+        "input_width": 640,
+        "data_path_eval": "/pub/data/lz/consist_depth/lzdataset/",
+        "gt_path_eval": "/pub/data/lz/consist_depth/lzdataset/",
+        "filenames_file_eval": "/pub/data/lz/consist_depth/MDE/ZoeDepth/train_test_inputs/mytest.txt",
         "min_depth_eval": 1e-3,
         "max_depth_eval": 10,
         "min_depth_diff": -10,

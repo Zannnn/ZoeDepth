@@ -80,24 +80,35 @@ def evaluate(model, test_loader, config, round_vals=True, round_precision=3):
         pred = infer(model, image, dataset=sample['dataset'][0], focal=focal)
 
         # Save image, depth, pred for visualization
-        if "save_images" in config and config.save_images:
-            import os
-            # print("Saving images ...")
-            from PIL import Image
-            import torchvision.transforms as transforms
-            from zoedepth.utils.misc import colorize
+        # if True:
+        #     import os
+        #     # print("Saving images ...")
+        #     from PIL import Image
+        #     import torchvision.transforms as transforms
+        #     from zoedepth.utils.misc import colorize
 
-            os.makedirs(config.save_images, exist_ok=True)
-            # def save_image(img, path):
-            d = colorize(depth.squeeze().cpu().numpy(), 0, 10)
-            p = colorize(pred.squeeze().cpu().numpy(), 0, 10)
-            im = transforms.ToPILImage()(image.squeeze().cpu())
-            im.save(os.path.join(config.save_images, f"{i}_img.png"))
-            Image.fromarray(d).save(os.path.join(config.save_images, f"{i}_depth.png"))
-            Image.fromarray(p).save(os.path.join(config.save_images, f"{i}_pred.png"))
+        #     # os.makedirs(config.save_images, exist_ok=True)
+        #     # def save_image(img, path):
+        #     d = colorize(depth.squeeze().cpu().numpy(), 0, 10)
+        #     p = colorize(pred.squeeze().cpu().numpy(), 0, 10)
+        #     im = transforms.ToPILImage()(image.squeeze().cpu())
+        #     im.save(os.path.join("/pub/data/lz/consist_depth/MDE/ZoeDepth/temp", f"{i}_img.png"))
+        #     Image.fromarray(d).save(os.path.join("/pub/data/lz/consist_depth/MDE/ZoeDepth/temp", f"{i}_depth.png"))
+        #     Image.fromarray(p).save(os.path.join("/pub/data/lz/consist_depth/MDE/ZoeDepth/temp", f"{i}_pred.png"))
 
 
+        # # Colorize output
+        from zoedepth.utils.misc import colorize
+        from PIL import Image
 
+        colored = colorize(pred)
+        # save colored output
+        fpath_colored = "/pub/data/lz/consist_depth/rendering/test/output_colored.png"
+        Image.fromarray(colored).save(fpath_colored)
+
+        
+        print(depth)
+        print(pred)
         # print(depth.shape, pred.shape)
         metrics.update(compute_metrics(depth, pred, config=config))
 
