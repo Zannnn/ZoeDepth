@@ -267,7 +267,7 @@ COMMON_TRAINING_CONFIG = {
     "shared_dict": None,
     "use_amp": False,
 
-    "aug": True,
+    "aug": False,
     "random_crop": False,
     "random_translate": False,
     "translate_prob": 0.2,

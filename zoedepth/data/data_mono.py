@@ -294,6 +294,9 @@ class DataLoadPreprocess(Dataset):
         focal = float(sample_path.split()[2])
         sample = {}
 
+        image_path = [None]*4
+        depth_path = [None]*4
+
         if self.mode == 'train':
             if self.config.dataset == 'kitti' and self.config.use_right and random.random() > 0.5:
                 image_path = os.path.join(
@@ -301,16 +304,22 @@ class DataLoadPreprocess(Dataset):
                 depth_path = os.path.join(
                     self.config.gt_path, remove_leading_slash(sample_path.split()[4]))
             else:
-                image_path = os.path.join(
-                    self.config.data_path, remove_leading_slash(sample_path.split()[0]))
-                depth_path = os.path.join(
-                    self.config.gt_path, remove_leading_slash(sample_path.split()[1]))
+                for i in range(4):
+                    image_path[i] = os.path.join(
+                        self.config.data_path, remove_leading_slash(sample_path.split()[0].replace('_p', '_p'+str(i+1))))
+                    depth_path[i] = os.path.join(
+                        self.config.gt_path, remove_leading_slash(sample_path.split()[1].replace('_gt', '_gt'+str(i+1))))
+                
+            image = [None]*4
+            depth_gt = [None]*4
+            mask = [None]*4
 
-            image = self.reader.open(image_path)
-            depth_gt = self.reader.open(depth_path)
-            w, h = image.size
+            for i in range(4):
+                image[i] = self.reader.open(image_path[i])
+                depth_gt[i] = self.reader.open(depth_path[i])
+            w, h = image[0].size
 
-            if self.config.do_kb_crop:
+            if self.config.do_kb_crop:    #nyu不干这个
                 height = image.height
                 width = image.width
                 top_margin = int(height - 352)
@@ -322,7 +331,7 @@ class DataLoadPreprocess(Dataset):
 
             # Avoid blank boundaries due to pixel registration?
             # Train images have white border. Test images have black border.
-            if self.config.dataset == 'nyu' and self.config.avoid_boundary:
+            if self.config.dataset == 'nyu' and self.config.avoid_boundary: #nyu不干这个
                 # print("Avoiding Blank Boundaries!")
                 # We just crop and pad again with reflect padding to original size
                 # original_size = image.size
@@ -340,98 +349,127 @@ class DataLoadPreprocess(Dataset):
                 depth_gt = Image.fromarray(depth_gt)
 
 
-            if self.config.do_random_rotate and (self.config.aug):
+            if self.config.do_random_rotate and (self.config.aug): #nyu不干这个
                 random_angle = (random.random() - 0.5) * 2 * self.config.degree
                 image = self.rotate_image(image, random_angle)
                 depth_gt = self.rotate_image(
                     depth_gt, random_angle, flag=Image.NEAREST)
 
-            image = np.asarray(image, dtype=np.float32) / 255.0
-            depth_gt = np.asarray(depth_gt, dtype=np.float32)
-            depth_gt = np.expand_dims(depth_gt, axis=2)
-
-            if self.config.dataset == 'nyu':
-                depth_gt = depth_gt / 1000.0
-            else:
-                depth_gt = depth_gt / 256.0
-
-            if self.config.aug and (self.config.random_crop):
-                image, depth_gt = self.random_crop(
-                    image, depth_gt, self.config.input_height, self.config.input_width)
             
-            if self.config.aug and self.config.random_translate:
-                # print("Random Translation!")
-                image, depth_gt = self.random_translate(image, depth_gt, self.config.max_translation)
+            for i in range(4):
+                image[i] = np.asarray(image[i], dtype=np.float32) / 255.0
+                depth_gt[i] = np.asarray(depth_gt[i], dtype=np.float32)
+                depth_gt[i] = np.expand_dims(depth_gt[i], axis=2)
 
-            image, depth_gt = self.train_preprocess(image, depth_gt)
-            mask = np.logical_and(depth_gt > self.config.min_depth,
-                                  depth_gt < self.config.max_depth).squeeze()[None, ...]
-            sample = {'image': image, 'depth': depth_gt, 'focal': focal,
-                      'mask': mask, **sample}
+                if self.config.dataset == 'nyu':
+                    depth_gt[i] = depth_gt[i] / 1000.0
+                else:
+                    depth_gt[i] = depth_gt[i] / 256.0
 
-        else:
+                image[i], depth_gt[i] = self.train_preprocess(image[i], depth_gt[i])  #好像也是数据增强
+
+                mask[i] = np.logical_and(depth_gt[i] > self.config.min_depth,
+                                    depth_gt[i] < self.config.max_depth).squeeze()[None, ...]
+                
+
+            top_image = np.concatenate([image[0],image[2]], axis=1)  # 左上 + 右上
+            bottom_image = np.concatenate([image[1],image[3]], axis=1)  # 左下 + 右下
+            image4 = np.concatenate([top_image, bottom_image], axis=0)  # 上下拼接
+
+            top_depth = np.concatenate([depth_gt[0],depth_gt[2]], axis=1)  # 左上 + 右上
+            bottom_depth = np.concatenate([depth_gt[1],depth_gt[3]], axis=1)  # 左下 + 右下
+            depth_gt4 = np.concatenate([top_depth, bottom_depth], axis=0)  # 上下拼接
+
+            top_mask = np.concatenate([mask[0],mask[2]], axis=2)  # 左上 + 右上
+            bottom_mask = np.concatenate([mask[1],mask[3]], axis=2)  # 左下 + 右下
+            mask4 = np.concatenate([top_mask, bottom_mask], axis=1)  # 上下拼接
+
+            sample = {'image': image4, 'depth': depth_gt4, 'focal': focal,
+                        'mask': mask4, **sample}
+
+        else:  #先nmlgbd解决train的事儿
             if self.mode == 'online_eval':
                 data_path = self.config.data_path_eval
             else:
                 data_path = self.config.data_path
 
-            image_path = os.path.join(
-                data_path, remove_leading_slash(sample_path.split()[0]))
-            image = np.asarray(self.reader.open(image_path),
-                               dtype=np.float32) / 255.0
+            image = [None]*4
+            for i in range(4):
+                image_path = os.path.join(
+                    data_path, remove_leading_slash(sample_path.split()[0].replace('_p', '_p'+str(i+1))))
+                image[i] = np.asarray(self.reader.open(image_path),
+                                dtype=np.float32) / 255.0
 
             if self.mode == 'online_eval':
-                gt_path = self.config.gt_path_eval
-                depth_path = os.path.join(
-                    gt_path, remove_leading_slash(sample_path.split()[1]))
-                has_valid_depth = False
-                try:
-                    depth_gt = self.reader.open(depth_path)
-                    has_valid_depth = True
-                except IOError:
-                    depth_gt = False
-                    # print('Missing gt for {}'.format(image_path))
+                depth_gt = [None]*4
+                mask = [None]*4
+                for i in range(4):                
+                    gt_path = self.config.gt_path_eval
+                    depth_path = os.path.join(
+                        gt_path, remove_leading_slash(sample_path.split()[1].replace('_gt', '_gt'+str(i+1))))
+                    has_valid_depth = False
+                    try:
+                        depth_gt[i] = self.reader.open(depth_path)
+                        has_valid_depth = True
+                    except IOError:
+                        depth_gt[i] = False
+                        # print('Missing gt for {}'.format(image_path))
 
-                if has_valid_depth:
-                    depth_gt = np.asarray(depth_gt, dtype=np.float32)
-                    depth_gt = np.expand_dims(depth_gt, axis=2)
-                    if self.config.dataset == 'nyu':
-                        depth_gt = depth_gt / 1000.0
+                    if has_valid_depth:
+                        depth_gt[i] = np.asarray(depth_gt[i], dtype=np.float32)
+                        depth_gt[i] = np.expand_dims(depth_gt[i], axis=2)
+                        if self.config.dataset == 'nyu':
+                            depth_gt[i] = depth_gt[i] / 1000.0
+                        else:
+                            depth_gt[i] = depth_gt[i] / 256.0
+
+                        mask[i] = np.logical_and(
+                            depth_gt[i] >= self.config.min_depth, depth_gt[i] <= self.config.max_depth).squeeze()[None, ...]
                     else:
-                        depth_gt = depth_gt / 256.0
+                        mask[i] = False
+                
 
-                    mask = np.logical_and(
-                        depth_gt >= self.config.min_depth, depth_gt <= self.config.max_depth).squeeze()[None, ...]
-                else:
-                    mask = False
+            # if self.config.do_kb_crop:
+            #     height = image.shape[0]
+            #     width = image.shape[1]
+            #     top_margin = int(height - 352)
+            #     left_margin = int((width - 1216) / 2)
+            #     image = image[top_margin:top_margin + 352,
+            #                   left_margin:left_margin + 1216, :]
+            #     if self.mode == 'online_eval' and has_valid_depth:
+            #         depth_gt = depth_gt[top_margin:top_margin +
+            #                             352, left_margin:left_margin + 1216, :]
+            
+            top_image = np.concatenate([image[0],image[2]], axis=1)  # 左上 + 右上
+            bottom_image = np.concatenate([image[1],image[3]], axis=1)  # 左下 + 右下
+            image4 = np.concatenate([top_image, bottom_image], axis=0)  # 上下拼接
 
-            if self.config.do_kb_crop:
-                height = image.shape[0]
-                width = image.shape[1]
-                top_margin = int(height - 352)
-                left_margin = int((width - 1216) / 2)
-                image = image[top_margin:top_margin + 352,
-                              left_margin:left_margin + 1216, :]
-                if self.mode == 'online_eval' and has_valid_depth:
-                    depth_gt = depth_gt[top_margin:top_margin +
-                                        352, left_margin:left_margin + 1216, :]
+            top_depth = np.concatenate([depth_gt[0],depth_gt[2]], axis=1)  # 左上 + 右上
+            bottom_depth = np.concatenate([depth_gt[1],depth_gt[3]], axis=1)  # 左下 + 右下
+            depth_gt4 = np.concatenate([top_depth, bottom_depth], axis=0)  # 上下拼接
+
+            top_mask = np.concatenate([mask[0],mask[2]], axis=2)  # 左上 + 右上
+            bottom_mask = np.concatenate([mask[1],mask[3]], axis=2)  # 左下 + 右下
+            mask4 = np.concatenate([top_mask, bottom_mask], axis=1)  # 上下拼接
+
 
             if self.mode == 'online_eval':
-                sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'has_valid_depth': has_valid_depth,
+                sample = {'image': image4, 'depth': depth_gt4, 'focal': focal, 'has_valid_depth': has_valid_depth,
                           'image_path': sample_path.split()[0], 'depth_path': sample_path.split()[1],
-                          'mask': mask}
+                          'mask': mask4}
             else:
-                sample = {'image': image, 'focal': focal}
+                sample = {'image': image4, 'focal': focal}
 
-        if (self.mode == 'train') or ('has_valid_depth' in sample and sample['has_valid_depth']):
-            mask = np.logical_and(depth_gt > self.config.min_depth,
-                                  depth_gt < self.config.max_depth).squeeze()[None, ...]
-            sample['mask'] = mask
+        # if (self.mode == 'train') or ('has_valid_depth' in sample and sample['has_valid_depth']):
+        #     mask[i] = np.logical_and(depth_gt[i] > self.config.min_depth,
+        #                           depth_gt[i] < self.config.max_depth).squeeze()[None, ...]
+            
+        #     sample['mask'] = mask4
 
         if self.transform:
             sample = self.transform(sample)
 
-        sample = self.postprocess(sample)
+        sample = self.postprocess(sample)  #没逼用
         sample['dataset'] = self.config.dataset
         sample = {**sample, 'image_path': sample_path.split()[0], 'depth_path': sample_path.split()[1]}
 
